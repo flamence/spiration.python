@@ -4,6 +4,8 @@
 
 ## Quick Start
 
+> Notice: We're using Python 3.11.9 and it may be changed at any time.
+
 Learning more on [Spiration Documents](https://flamence.github.io/spiration.docs/en/).
 
 ## Contributing

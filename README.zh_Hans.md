@@ -4,6 +4,8 @@
 
 ## 快速开始
 
+> 注意: 我们使用 Python 3.11.9 且同时可能随时更换版本。
+
 在 [Spiration 文档](https://flamence.github.io/spiration.docs/) 中了解更多。
 
 ## 贡献支持
