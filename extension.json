@@ -1,0 +1,6 @@
+{
+    "id": "com.flamence.spiration.python",
+    "version": "@PROJECT_VERSION@",
+    "main": "@LIBRARY_PATH@",
+    "api_version": 0
+}
