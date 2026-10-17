@@ -1,41 +1,48 @@
-include_directories("include")
-
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lib")
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lib")
-
-add_library(${PROJECT_NAME} SHARED 
-    "src/extension.cpp"
-    "src/spiration/python/executor.cpp"
+add_library(${PROJECT_NAME} SHARED
+    "src/spiration/python/loader.cpp"
+    "src/spiration/python/module.cpp"
+    "src/spiration/python/runtime.cpp"
 )
 
-target_link_libraries(${PROJECT_NAME} PUBLIC 
-    Python3::Python
-    pybind11::headers
-)
+target_compile_definitions(${PROJECT_NAME} PRIVATE SPIRATION_EXTENSION)
 
-add_library(${PROJECT_NAME}.bootstrap SHARED 
-    "src/bootstrap.cpp"
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    SPIRATION_PYTHON_VERSION_STRING="${Python3_VERSION}"
+    SPIRATION_PYTHON_VERSION_COMPACT="${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}"
 )
-
-add_library(spiration::python ALIAS ${PROJECT_NAME})
-if(UNIX)
-    target_link_options(${PROJECT_NAME} PRIVATE 
-        "LINKER:--unresolved-symbols=ignore-in-shared-lib"
-        #-Wl,--unresolved-symbols=ignore-in-shared-lib
-    )
-endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE SPIRATION_EXTENSION)
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    spiration::api
+    Python3::Python
+)
+
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE advapi32)
+endif()
+
+if(SPIRATION_PYTHON_PREFIX)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+        SPIRATION_PYTHON_DEFAULT_HOME="${SPIRATION_PYTHON_PREFIX}"
+    )
+endif()
 
 if(WIN32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX)
 endif()
 
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    spiration::api
-)
+if(WIN32)
+    get_filename_component(_spiration_python_bin "${Python3_EXECUTABLE}" DIRECTORY)
+    file(GLOB _spiration_python_dlls "${_spiration_python_bin}/python3*.dll")
+    if(_spiration_python_dlls)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${_spiration_python_dlls}
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        )
+        install(FILES ${_spiration_python_dlls} DESTINATION "bin")
+    endif()
+endif()
