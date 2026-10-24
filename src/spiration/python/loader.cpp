@@ -441,12 +441,28 @@ spiration_extension_desc* SPIRATION_CALL loader_instantiate(
         script->entry = resolve_entry_path(script->entry, script->directory);
     }
 
+    /* 安装清单声明的 PyPI 依赖：清单含 python.requirements 时，
+       在导入脚本前通过 pip 安装到拓展数据目录并注入 sys.path。
+       失败则拒绝装载，避免脚本在缺依赖的情况下留下半成品状态。 */
+    {
+        std::string dependency_error;
+        if (!ensure_dependencies(script, &dependency_error)) {
+            log_with(&script->desc, SPIRATION_LOG_ERROR,
+                     "failed to prepare python dependencies: " +
+                         dependency_error,
+                     "python/pip");
+            delete script;
+            return nullptr;
+        }
+    }
+
     {
         gil_guard gil;
         script_scope scope(script);
 
         /* 模块搜索路径按脚本的**实际**目录追加：当拓展目录名与 ID 不一致时，
            解析出的入口可能位于宿主给出的目录之外（见 resolve_entry_path）。 */
+        add_dependency_path(script);
         add_script_paths(directory_of(script->entry));
         script->module = import_script_module(script);
         if (script->module == nullptr) {
@@ -580,6 +596,14 @@ spiration_extension_desc g_descriptor = {
 script_state* current_script() { return g_current_script; }
 
 void set_current_script(script_state* script) { g_current_script = script; }
+
+void log_to(const spiration_extension_desc* self, spiration_log_level level,
+            const std::string& message, const std::string& tag) {
+    if (self == nullptr || self->host == nullptr || self->host->log == nullptr) {
+        return;
+    }
+    self->host->log(self, level, to_view(message), to_view(tag));
+}
 
 service_entry* register_python_service(script_state* script, PyObject* object) {
     if (script == nullptr || object == nullptr) return nullptr;

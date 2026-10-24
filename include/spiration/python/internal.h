@@ -110,6 +110,9 @@ struct script_state {
     /** 本脚本注册的智能体 provider：名称 → 绑定（需持有 GIL 访问）。 */
     std::map<std::string, agent_provider_binding*> agent_providers;
 
+    /** 清单声明的 PyPI 依赖安装目录（site-packages）；未声明时为空。 */
+    std::string dependency_path;
+
     /** 返回给宿主的描述符。必须位于上述字符串之后。 */
     spiration_extension_desc desc;
 };
@@ -224,6 +227,11 @@ std::string python_home();
  * @note 追加 `<dir>`、`<dir>/python`、`<dir>/lib`、`<dir>/site-packages`。
  */
 void add_script_paths(const std::string& directory);
+
+/**
+ * @brief 把目录插入 `sys.path` 最前面（需持有 GIL）；已存在时忽略。
+ */
+void add_sys_path(const std::string& path);
 
 /**
  * @brief 由文件路径导入脚本模块（需持有 GIL）。
@@ -378,6 +386,40 @@ spiration_status unregister_python_provider(script_state* script,
  * @brief 注销脚本注册的全部 provider（需持有 GIL）。
  */
 void release_agent_providers(script_state* script);
+
+/* ------------------------------------------------------------------------- */
+/* dependencies.cpp                                                          */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * @brief 记录一条加载器日志（任意线程，内部只调用宿主日志）。
+ * @param self    拓展描述符（可为 `nullptr`）。
+ * @param level   日志等级。
+ * @param message 日志正文。
+ * @param tag     日志标签。
+ */
+void log_to(const spiration_extension_desc* self, spiration_log_level level,
+            const std::string& message, const std::string& tag);
+
+/**
+ * @brief 确保脚本清单声明的 PyPI 依赖已安装。
+ *
+ * 读取清单中的 `python.requirements`（带版本约束的 PEP 508 规格列表），
+ * 在拓展数据目录的 `python/site-packages` 下通过 `pip install --target`
+ * 安装；需求未变化时复用已有安装结果。成功时把 site-packages 路径写入
+ * `script_state::dependency_path`（后续由 `add_dependency_path` 注入）。
+ *
+ * @param script 脚本状态（清单、描述符必须已就绪）。
+ * @param error  失败原因（含 pip 输出尾部），可为 `nullptr`。
+ * @return 成功（或无需安装）返回 `true`；失败返回 `false`，调用方应拒绝装载。
+ * @note 不要求调用方持有 GIL；内部按需获取/释放（pip 运行期间释放 GIL）。
+ */
+bool ensure_dependencies(script_state* script, std::string* error);
+
+/**
+ * @brief 把已安装的依赖目录注入 `sys.path`（需持有 GIL）。
+ */
+void add_dependency_path(script_state* script);
 
 } // namespace loader
 } // namespace python

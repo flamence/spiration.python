@@ -1,5 +1,6 @@
 add_library(${PROJECT_NAME} SHARED
     "src/spiration/python/agent.cpp"
+    "src/spiration/python/dependencies.cpp"
     "src/spiration/python/loader.cpp"
     "src/spiration/python/module.cpp"
     "src/spiration/python/runtime.cpp"

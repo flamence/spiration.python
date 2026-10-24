@@ -597,6 +597,11 @@ void add_script_paths(const std::string& directory) {
     prepend_sys_path(directory);
 }
 
+void add_sys_path(const std::string& path) {
+    if (path.empty()) return;
+    prepend_sys_path(path);
+}
+
 PyObject* import_script_module(script_state* script) {
     PyObject* util = PyImport_ImportModule("importlib.util");
     if (util == nullptr) return nullptr;
