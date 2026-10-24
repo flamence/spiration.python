@@ -758,6 +758,65 @@ PyObject* m_ui_widget_listen(PyObject* self, PyObject* args) {
 }
 
 /* -------------------------------------------------------------------------
+ * 智能体接口
+ * ---------------------------------------------------------------------- */
+
+/** @brief 宿主是否提供智能体接口。 */
+PyObject* m_agent_supported(PyObject* self, PyObject* args) {
+    SPIRATION_UNUSED(self);
+    SPIRATION_UNUSED(args);
+    return PyBool_FromLong(agent_api(current_script()) != nullptr ? 1 : 0);
+}
+
+/** @brief 注册 provider。 */
+PyObject* m_agent_register_provider(PyObject* self, PyObject* args) {
+    SPIRATION_UNUSED(self);
+    script_state* script = current_script();
+    if (script == nullptr) Py_RETURN_NONE;
+
+    const char* name = nullptr;
+    PyObject* provider = nullptr;
+    if (!PyArg_ParseTuple(args, "sO:register_provider", &name, &provider)) {
+        return nullptr;
+    }
+    if (name == nullptr || name[0] == '\0' || provider == Py_None) {
+        PyErr_SetString(PyExc_ValueError,
+                        "register_provider: name and provider are required");
+        return nullptr;
+    }
+
+    const spiration_status status =
+        register_python_provider(script, std::string(name), provider);
+    if (status != SPIRATION_OK) {
+        if (PyErr_Occurred() != nullptr) return nullptr;
+        return host_error(script, "agent.register_provider");
+    }
+    Py_RETURN_NONE;
+}
+
+/** @brief 注销 provider。 */
+PyObject* m_agent_unregister_provider(PyObject* self, PyObject* args) {
+    SPIRATION_UNUSED(self);
+    script_state* script = current_script();
+    if (script == nullptr) Py_RETURN_NONE;
+
+    const char* name = nullptr;
+    if (!PyArg_ParseTuple(args, "s:unregister_provider", &name)) return nullptr;
+    if (name == nullptr || name[0] == '\0') {
+        PyErr_SetString(PyExc_ValueError, "unregister_provider: empty name");
+        return nullptr;
+    }
+
+    const spiration_status status =
+        unregister_python_provider(script, std::string(name));
+    if (status != SPIRATION_OK) {
+        if (PyErr_Occurred() != nullptr) return nullptr;
+        return host_error(script, "agent.unregister_provider");
+    }
+    Py_RETURN_NONE;
+}
+
+/* -------------------------------------------------------------------------
  * 方法表
  * ---------------------------------------------------------------------- */
 
@@ -795,6 +854,17 @@ PyMethodDef k_module_methods[] = {
     {"extensions", m_extensions, METH_NOARGS, "extensions() -> list[dict]"},
     {"ui_supported", m_ui_supported, METH_NOARGS,
      "ui_supported() -> bool\n\n宿主是否提供 spiration.ui 接口。"},
+    {NULL, NULL, 0, NULL}};
+
+PyMethodDef k_agent_methods[] = {
+    {"supported", m_agent_supported, METH_NOARGS,
+     "supported() -> bool\n\n宿主是否提供 spiration.agent 接口。"},
+    {"register_provider", m_agent_register_provider, METH_VARARGS,
+     "register_provider(name, provider) -> None\n\n"
+     "注册对话补全 provider。provider 需提供 execute(request, stream) 方法，"
+     "可选 reasoning_levels() 声明支持的思考挡位。"},
+    {"unregister_provider", m_agent_unregister_provider, METH_VARARGS,
+     "unregister_provider(name) -> None\n\n注销对话补全 provider。"},
     {NULL, NULL, 0, NULL}};
 
 PyMethodDef k_ui_methods[] = {
@@ -1105,6 +1175,17 @@ PyObject* build_injected_module() {
         PyModule_AddIntConstant(ui_module, "WIDGET_MARKDOWN", SPIRATION_WIDGET_MARKDOWN);
 
         PyModule_AddObject(module, "ui", ui_module);
+    }
+
+    /* spiration.agent：可选智能体接口，宿主可能不支持。 */
+    PyObject* agent_module = PyModule_New("spiration.agent");
+    if (agent_module != nullptr) {
+        for (PyMethodDef* def = k_agent_methods; def->ml_name != nullptr; ++def) {
+            PyObject* function = PyCFunction_NewEx(def, NULL, NULL);
+            if (function == nullptr) continue;
+            PyModule_AddObject(agent_module, def->ml_name, function);
+        }
+        PyModule_AddObject(module, "agent", agent_module);
     }
 
     /* 日志等级常量，便于脚本写 spiration.log(spiration.LOG_INFO, ...)。 */

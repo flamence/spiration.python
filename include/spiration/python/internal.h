@@ -36,7 +36,8 @@
 #include <vector>
 
 namespace spiration {
-namespace python_loader {
+namespace python {
+namespace loader {
 
 /** @brief 加载器拓展 ID。 */
 inline const char* loader_id() { return "com.flamence.spiration.python"; }
@@ -68,6 +69,8 @@ const char* script_capsule_name();
 struct listener_ref;
 /** @brief 投递任务载体（定义见下）。 */
 struct dispatch_task;
+/** @brief 智能体 provider 绑定（定义见 agent.cpp）。 */
+struct agent_provider_binding;
 
 /**
  * @brief 单个脚本拓展的状态。
@@ -104,6 +107,8 @@ struct script_state {
     int64_t next_callback = 1;
     /** `host->dispatch` 待执行任务的登记（用于关闭时清理）。 */
     std::set<dispatch_task*> pending_tasks;
+    /** 本脚本注册的智能体 provider：名称 → 绑定（需持有 GIL 访问）。 */
+    std::map<std::string, agent_provider_binding*> agent_providers;
 
     /** 返回给宿主的描述符。必须位于上述字符串之后。 */
     spiration_extension_desc desc;
@@ -332,5 +337,48 @@ service_entry* register_python_service(script_state* script, PyObject* object);
  */
 PyObject* lookup_python_service(void* handle);
 
-} // namespace python_loader
+/* ------------------------------------------------------------------------- */
+/* agent.cpp                                                                 */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * @brief 取宿主的智能体接口。
+ * @param script 脚本状态；`nullptr` 时返回 `nullptr`。
+ * @return 函数表；宿主不支持智能体能力时返回 `nullptr`。
+ */
+const spiration_agent_api* agent_api(script_state* script);
+
+/**
+ * @brief 注册一个 Python provider（需持有 GIL）。
+ *
+ * `provider` 需提供可调用的 `execute(request, stream)`；可选
+ * `reasoning_levels()` 返回思考挡位名称序列（注册时调用一次）。
+ *
+ * @param script   脚本状态。
+ * @param name     provider 名称（全局唯一）。
+ * @param provider provider 对象（借用，函数内会持有引用）。
+ * @return 状态码；参数错误时已设置 Python 异常。
+ */
+spiration_status register_python_provider(script_state* script,
+                                          const std::string& name,
+                                          PyObject* provider);
+
+/**
+ * @brief 注销一个 Python provider（需持有 GIL）。
+ *
+ * 内部会在调用宿主的 `unregister_provider` 前释放 GIL：宿主可能等待正在
+ * 执行的 `execute` 结束，而后者回来时又需要 GIL，若不放行会互相等待。
+ *
+ * @return 状态码；名称不存在时返回 `SPIRATION_OK`。
+ */
+spiration_status unregister_python_provider(script_state* script,
+                                            const std::string& name);
+
+/**
+ * @brief 注销脚本注册的全部 provider（需持有 GIL）。
+ */
+void release_agent_providers(script_state* script);
+
+} // namespace loader
+} // namespace python
 } // namespace spiration

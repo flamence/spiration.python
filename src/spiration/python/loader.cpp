@@ -384,6 +384,7 @@ void SPIRATION_CALL script_shutdown(spiration_extension_desc* self) {
         }
     }
     release_services(script->id);
+    release_agent_providers(script);
     Py_CLEAR(script->module);
     release_callbacks(script);
     Py_CLEAR(script->injected);
@@ -665,6 +666,14 @@ void release_graveyard() {
     }
 }
 
+/* 入口钩子位于命名空间之外，通过下面两个包装访问匿名命名空间中的状态。 */
+
+/** @brief 加载器自身的描述符。 */
+spiration_extension_desc* loader_descriptor() { return &g_descriptor; }
+
+/** @brief 加载器函数表。 */
+const spiration_loader_api* loader_api_table() { return loader_table(); }
+
 } // namespace loader
 } // namespace python
 } // namespace spiration
@@ -676,20 +685,20 @@ static const spiration_extension_desc* SPIRATION_CALL python_loader_hook(
     const spiration_host_api* host, spiration_str_view manifest_json) {
     SPIRATION_UNUSED(manifest_json);
 
-    spiration::python_loader::g_descriptor.host = host;
+    spiration::python::loader::loader_descriptor()->host = host;
     if (host != nullptr && host->register_loader != nullptr &&
-        host->register_loader(&spiration::python_loader::g_descriptor,
-                              spiration::python_loader::loader_table()) !=
+        host->register_loader(spiration::python::loader::loader_descriptor(),
+                              spiration::python::loader::loader_api_table()) !=
             SPIRATION_OK) {
         const std::string message = "failed to register the python loader";
         if (host->log != nullptr) {
-            host->log(&spiration::python_loader::g_descriptor,
+            host->log(spiration::python::loader::loader_descriptor(),
                       SPIRATION_LOG_ERROR,
                       spiration_str_view_of(message.data(), message.size()),
                       SPIRATION_STR("python"));
         }
     }
-    return &spiration::python_loader::g_descriptor;
+    return spiration::python::loader::loader_descriptor();
 }
 
 SPIRATION_DEFINE_EXTENSION_ENTRY_HOOKED(&python_loader_hook)
