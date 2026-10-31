@@ -25,6 +25,6 @@ include(FetchContent)
 FetchContent_Declare(
     spiration.api
     GIT_REPOSITORY https://github.com/flamence/spiration.api.git
-    GIT_TAG v0.1.0
+    GIT_TAG main
 )
 FetchContent_MakeAvailable(spiration.api)
