@@ -15,9 +15,9 @@ install(TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION "bin"
 )
 
-install(DIRECTORY res/
-    DESTINATION "."
-)
+# install(DIRECTORY res/
+#     DESTINATION "."
+# )
 
 install(CODE "
     set(PACKAGE_ROOT \"\${CMAKE_INSTALL_PREFIX}\")
