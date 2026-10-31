@@ -1,0 +1,131 @@
+name: Build
+
+on:
+  push:
+    paths:
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'include/**'
+      - 'src/**'
+      - '.github/workflows/**'
+  pull_request:
+    paths:
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'include/**'
+      - 'src/**'
+      - '.github/workflows/**'
+  release:
+    types: [ published ]
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - windows-latest
+          - windows-11-vs2026-arm
+          - macos-latest
+          - macos-26-intel
+        build_type: [ Release ]
+        c_compiler: [ clang ]
+        cpp_compiler: [ clang++ ]
+        generator: [ Ninja ]
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: pre-strings
+        shell: bash
+        run: |
+          echo "build-output-dir=$GITHUB_WORKSPACE/build" >> "$GITHUB_OUTPUT"
+
+      - shell: bash
+        run: >
+          cmake -B "${{ steps.pre-strings.outputs.build-output-dir }}"
+          -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
+          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -S "$GITHUB_WORKSPACE"
+          -G ${{ matrix.generator }}
+
+      - run: cmake --build "${{ steps.pre-strings.outputs.build-output-dir }}" --config ${{ matrix.build_type }} --target package
+
+      - id: post-strings
+        shell: bash
+        run: |
+          PKG_DIR="$GITHUB_WORKSPACE/build/pkg"
+          PACKAGE_FILE=$(find "$PKG_DIR" -maxdepth 1 -type f -name "*.tar.gz" | head -n 1)
+          if [ -z "$PACKAGE_FILE" ]; then
+            exit 1
+          fi
+          echo "archive-path=$PACKAGE_FILE" >> "$GITHUB_OUTPUT"
+
+      - if: github.event_name != 'release'
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.post-strings.outputs.archive-path }}
+          archive: false
+
+      - if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: ${{ steps.post-strings.outputs.archive-path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-harmonyos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: |
+          sudo ln -sf /usr/lib/x86_64-linux-gnu/libxml2.so.16 /usr/lib/x86_64-linux-gnu/libxml2.so.2
+
+      - id: pre-strings
+        shell: bash
+        run: |
+          echo "build-output-dir=$GITHUB_WORKSPACE/build" >> "$GITHUB_OUTPUT"
+
+      - uses: chen-linkai/setup-hmos-pipeline@v1.1
+        with:
+          version: 'latest'
+          java-distribution: 'oracle'
+
+      - shell: bash
+        run: >
+          cmake -B "${{ steps.pre-strings.outputs.build-output-dir }}"
+          -DCMAKE_TOOLCHAIN_FILE="$COMMANDLINE_TOOL_DIR/command-line-tools/sdk/default/openharmony/native/build/cmake/ohos.toolchain.cmake"
+          -DOHOS_ARCH=arm64-v8a
+          -DOHOS_PLATFORM=ohos
+          -DCMAKE_BUILD_TYPE=Release
+      
+      - run: cmake --build "${{ steps.pre-strings.outputs.build-output-dir }}" --config Release --target package
+
+      - id: post-strings
+        shell: bash
+        run: |
+          PKG_DIR="$GITHUB_WORKSPACE/build/pkg"
+          PACKAGE_FILE=$(find "$PKG_DIR" -maxdepth 1 -type f -name "*.tar.gz" | head -n 1)
+          if [ -z "$PACKAGE_FILE" ]; then
+            exit 1
+          fi
+          echo "archive-path=$PACKAGE_FILE" >> "$GITHUB_OUTPUT"
+
+      - if: github.event_name != 'release'
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.post-strings.outputs.archive-path }}
+          archive: false
+
+      - if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: ${{ steps.post-strings.outputs.archive-path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
