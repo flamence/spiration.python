@@ -101,6 +101,8 @@ jobs:
           echo "build-output-dir=$GITHUB_WORKSPACE/build" >> "$GITHUB_OUTPUT"
 
       - uses: chen-linkai/setup-hmos-pipeline@v1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           version: 'latest'
           java-distribution: 'oracle'
